@@ -11,11 +11,11 @@ async function connectionDb() {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             id_chat TEXT,
             created_at TIMESTAMP,
+            updated_at TIMESTAMP,
             status_reviewing BOOLEAN DEFAULT 0,
             status_closed BOOLEAN DEFAULT 0
         )
     `);
-    console.info("Conexion a la base de datos establecida (node:sqlite)");
 
     return {
         get: async (sql, params = []) => db.prepare(sql).get(...params),

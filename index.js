@@ -41,6 +41,11 @@ client.on('message', async (msg) => {
         return
     }
 
+    const info_contact = await msg.getContact();
+    const nombre_contact = info_contact.name || info_contact.pushname || info_contact.number;
+
+    const chat = await client.getChatById(msg.from);
+
     let check_while = true;
     while (check_while) {
         try {
@@ -54,9 +59,29 @@ client.on('message', async (msg) => {
             `, [msg.from]);
             if (checkChat.length == 0) {
                 await connection.exec(`
-                    INSERT INTO chat_pending (id_chat, created_at) 
-                    VALUES (?, ?)`,
-                    [msg.from, dayjs().tz("America/Caracas").format('YYYY-MM-DD HH:mm:ss')]
+                    INSERT INTO chat_pending (id_chat, created_at, updated_at) 
+                    VALUES (?, ?, ?)`,
+                    [
+                        msg.from,
+                        dayjs().tz("America/Caracas").format('YYYY-MM-DD HH:mm:ss'),
+                        dayjs().tz("America/Caracas").format('YYYY-MM-DD HH:mm:ss')
+                    ]
+                );
+                await wait(1500);
+                await chat.clearState();
+                await chat.sendSeen()
+                await chat.sendStateTyping();
+                await wait(5000);
+                await msg.reply(`Hola ${nombre_contact}, en breves momentos te atenderemos`);
+                await chat.clearState();
+            } else {
+                await connection.exec(`
+                    UPDATE chat_pending 
+                    SET updated_at = ?
+                    WHERE id_chat = ?
+                    AND status_closed = 0
+                    AND status_reviewing = 0`,
+                    [dayjs().tz("America/Caracas").format('YYYY-MM-DD HH:mm:ss'), msg.from]
                 );
             }
             await connection.close();
@@ -69,7 +94,6 @@ client.on('message', async (msg) => {
     }
 
 
-    const chat = await client.getChatById(msg.from);
     await wait(3500);
     await chat.clearState();
     await chat.sendSeen()
