@@ -12,6 +12,7 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 
 const initCronJobs = require('./src/cron/check_pending.js');
+const { initializeContextDB } = require('./src/services/context-db.js');
 
 
 const client = new Client({
@@ -133,4 +134,17 @@ client.on('message', async (msg) => {
 
 });
 
-client.initialize();
+async function init() {
+    try {
+        console.log('[Inicialización] Iniciando ChromaDB...');
+        await initializeContextDB();
+        console.log('[Inicialización] ChromaDB inicializado exitosamente');
+    } catch (error) {
+        console.warn('[Inicialización] ChromaDB falló, continuando sin contexto:', error.message);
+    }
+    
+    console.log('[Inicialización] Iniciando cliente de WhatsApp...');
+    client.initialize();
+}
+
+init();

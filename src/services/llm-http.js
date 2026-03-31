@@ -1,5 +1,6 @@
 const config = require('../config/env');
 const constants = require('../config/constants');
+const { getContextForMessage } = require('./context-db.js');
 
 const DEEPSEEK_ERROR_CODES = {
     400: 'Invalid Format - Check request body format',
@@ -28,7 +29,7 @@ function validateMessages(messages) {
     }
 }
 
-function formatWhatsAppMessagesToLLM(messages, contactName) {
+async function formatWhatsAppMessagesToLLM(messages, contactName) {
     const formattedMessages = [
         {
             role: constants.LLM.ROLE.SYSTEM,
@@ -49,7 +50,29 @@ function formatWhatsAppMessagesToLLM(messages, contactName) {
         }
     }
 
+    const lastUserMessageIndex = findLastUserMessageIndex(formattedMessages);
+    if (lastUserMessageIndex !== -1) {
+        const lastUserMessage = formattedMessages[lastUserMessageIndex];
+        const context = await getContextForMessage(lastUserMessage.content);
+        
+        if (context) {
+            console.log(`[LLM] Contexto obtenido para mensaje: "${lastUserMessage.content.substring(0, 50)}..."`);
+            console.log(`[LLM] Añadiendo contexto al system prompt (longitud contexto: ${context.length} chars)`);
+            formattedMessages[0].content = formattedMessages[0].content + '\n\n' + context;
+            console.log(`[LLM] System prompt actualizado (longitud total: ${formattedMessages[0].content.length} chars)`);
+        }
+    }
+
     return formattedMessages;
+}
+
+function findLastUserMessageIndex(messages) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === constants.LLM.ROLE.USER) {
+            return i;
+        }
+    }
+    return -1;
 }
 
 function buildPayload(messages) {
@@ -191,7 +214,7 @@ async function callDeepSeekAPI(messages, options = {}) {
 
 async function generateResponse(whatsAppMessages, contactName, options = {}) {
     const { maxRetries = constants.LLM.MAX_RETRIES } = options;
-    const formattedMessages = formatWhatsAppMessagesToLLM(whatsAppMessages, contactName);
+    const formattedMessages = await formatWhatsAppMessagesToLLM(whatsAppMessages, contactName);
 
     let lastError;
 
