@@ -2,6 +2,8 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const connectionDb = require('./src/memory_chat/connection.js');
 const wait = require('./src/tools/wait.js');
+const config = require('./src/config/env');
+const constants = require('./src/config/constants');
 
 const dayjs = require('dayjs');
 const utc = require('dayjs/plugin/utc');
@@ -64,41 +66,57 @@ client.on('message', async (msg) => {
     while (check_while) {
         try {
             const connection = await connectionDb();
-            const checkChat = await connection.all(`
-                SELECT id
-                FROM chat_pending 
-                WHERE id_chat = ?
-                    AND status_closed = 0
-                    AND status_reviewing = 0
-            `, [msg.from]);
-            if (checkChat.length == 0) {
+            const currentTime = dayjs().tz("America/Caracas").format('YYYY-MM-DD HH:mm:ss');
+            
+            const chatStatus = await connection.getChatStatus(msg.from);
+            let shouldSendGreeting = false;
+            
+            if (!chatStatus) {
                 await connection.exec(`
                     INSERT INTO chat_pending (id_chat, created_at, updated_at) 
                     VALUES (?, ?, ?)`,
-                    [
-                        msg.from,
-                        dayjs().tz("America/Caracas").format('YYYY-MM-DD HH:mm:ss'),
-                        dayjs().tz("America/Caracas").format('YYYY-MM-DD HH:mm:ss')
-                    ]
+                    [msg.from, currentTime, currentTime]
                 );
+                shouldSendGreeting = true;
+                console.log(`[DB] Nuevo chat creado para ${msg.from}`);
+            } else {
+                if (chatStatus.status_closed === 1) {
+                    await connection.resetChatStatus(msg.from, currentTime);
+                    console.log(`[DB] Chat ${msg.from} reset de estado cerrado`);
+                }
+                
+                let isInactive = true;
+                if (chatStatus.updated_at) {
+                    const updatedAt = dayjs.tz(chatStatus.updated_at, "America/Caracas");
+                    const hoursDiff = dayjs().tz("America/Caracas").diff(updatedAt, 'hour');
+                    isInactive = hoursDiff >= config.chat.inactivityHoursForGreeting;
+                }
+                
+                if (isInactive) {
+                    shouldSendGreeting = true;
+                    console.log(`[DB] Chat ${msg.from} inactivo por más de ${config.chat.inactivityHoursForGreeting} horas, enviando saludo`);
+                }
+                
+                await connection.exec(`
+                    UPDATE chat_pending 
+                    SET updated_at = ?
+                    WHERE id_chat = ?`,
+                    [currentTime, msg.from]
+                );
+            }
+            
+            await connection.close();
+            
+            if (shouldSendGreeting) {
                 await wait(1500);
                 await chat.clearState();
-                await chat.sendSeen()
+                await chat.sendSeen();
                 await chat.sendStateTyping();
                 await wait(5000);
                 await msg.reply(`Hola ${nombre_contact}, en breves momentos te atenderemos`);
                 await chat.clearState();
-            } else {
-                await connection.exec(`
-                    UPDATE chat_pending 
-                    SET updated_at = ?
-                    WHERE id_chat = ?
-                    AND status_closed = 0
-                    AND status_reviewing = 0`,
-                    [dayjs().tz("America/Caracas").format('YYYY-MM-DD HH:mm:ss'), msg.from]
-                );
             }
-            await connection.close();
+            
             check_while = false;
         } catch (error) {
             await wait(1500);
@@ -112,10 +130,6 @@ client.on('message', async (msg) => {
     await chat.clearState();
     await chat.sendSeen()
     await chat.sendStateTyping();
-
-    // const mensajes = await chat.fetchMessages({ limit: 15 });
-    // console.log(mensajes)
-
 
 });
 
