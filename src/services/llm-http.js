@@ -124,13 +124,6 @@ async function callDeepSeekAPI(messages, options = {}) {
 
     try {
         console.log(`[LLM] Calling DeepSeek API: ${url}`);
-        console.log(`[LLM] Payload:`, JSON.stringify({
-            ...payload,
-            messages: payload.messages.map(m => ({ 
-                role: m.role, 
-                content: m.content?.substring(0, 100) + (m.content?.length > 100 ? '...' : '') 
-            }))
-        },null,2));
 
         const response = await fetch(url, {
             method: 'POST',

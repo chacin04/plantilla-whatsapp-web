@@ -9,6 +9,7 @@ Node.js WhatsApp automation system using `whatsapp-web.js`, DeepSeek LLM API, Ch
 ## Build and Development Commands
 
 ### Available npm scripts
+
 ```bash
 npm start                      # Start main application
 npm run start:chroma          # Start ChromaDB server (./chroma_db)
@@ -17,12 +18,14 @@ npm run test:context          # Test ChromaDB context functionality
 ```
 
 ### Manual commands
+
 ```bash
 node -c file.js               # Check JavaScript syntax
 npx chroma run --path ./chroma_db  # Start ChromaDB server
 ```
 
 ### Missing (not configured)
+
 - Linting (ESLint/Prettier)
 - Unit tests framework
 - Type checking (TypeScript)
@@ -30,28 +33,32 @@ npx chroma run --path ./chroma_db  # Start ChromaDB server
 ## Code Style Guidelines
 
 ### Imports and Exports
+
 - CommonJS (`require`/`module.exports`) only
 - Group imports: external packages first, then internal modules
 - Use destructuring for named imports
 
 ```javascript
-const { Client, LocalAuth } = require('whatsapp-web.js');
-const config = require('./src/config/env');
+const { Client, LocalAuth } = require("whatsapp-web.js");
+const config = require("./src/config/env");
 ```
 
 ### Naming Conventions
+
 - **Variables/functions**: `camelCase` (some legacy `snake_case` tolerated)
 - **Constants**: `UPPER_SNAKE_CASE`
 - **Database columns**: `snake_case` (matches SQLite)
 - **Configuration objects**: `camelCase` with nested uppercase keys
 
 ### Formatting
+
 - **Indentation**: 4 spaces
 - **Semicolons**: Always
 - **Quotes**: Single quotes for strings
 - **Braces**: Opening brace on same line
 
 ### Error Handling
+
 - Use `try/catch` for async operations
 - Throw descriptive `Error` objects with context
 - Log errors with console.error and relevant identifiers
@@ -59,20 +66,22 @@ const config = require('./src/config/env');
 
 ```javascript
 async function apiCall() {
-    try {
-        // operation
-    } catch (error) {
-        console.error('[MODULE] Error:', error);
-        throw error;
-    }
+  try {
+    // operation
+  } catch (error) {
+    console.error("[MODULE] Error:", error);
+    throw error;
+  }
 }
 ```
 
 ### Asynchronous Code
+
 - Use `async/await` over promise chains
 - Use `Promise.race` with timeouts for external calls
 
 ### Logging
+
 - Prefix logs with module identifier in brackets: `[ChromaDB]`, `[LLM]`, `[CRON]`
 - Include relevant identifiers (chat IDs, contact names)
 - Use console.log for info, console.error for errors
@@ -80,40 +89,60 @@ async function apiCall() {
 ## Project Structure Patterns
 
 ### Configuration
+
 - Environment variables via `dotenv` in `src/config/env.js`
 - Constants in `src/config/constants.js`
 - Validation on startup
 
 ### Database Access
+
 - SQLite with custom wrapper in `src/memory_chat/connection.js`
 - Prepared statements, explicit connection management
 
 ### Service Modules
+
 - LLM HTTP client: `src/services/llm-http.js`
 - ChromaDB context: `src/services/context-db.js`
 - Each exports a clear API
 
 ### Cron Jobs
+
 - Scheduled tasks in `src/cron/check_pending.js`
 - Uses `croner` package
 
 ## ChromaDB Integration
 
 ### Initialization
+
 - Server runs separately: `npx chroma run --path ./chroma_db`
 - Client connects to `localhost:8000`
 - Collection recreated on each app start (delete old, create new)
-- Local embeddings with `@xenova/transformers`
+- Local embeddings with `@chroma-core/default-embed`
 
 ### Context Management
-- Context loaded from `contexto.txt` in root
-- Text split by paragraphs (`\n\n`)
-- Semantic search returns top N similar paragraphs
+
+- Context loaded from files in `contexto/` directory (TXT and PDF)
+- Text split using adaptive semantic chunking algorithm (respects paragraphs, merges short segments, splits long paragraphs)
+- Semantic search returns top N similar chunks
 - Context injected as additional system message before LLM calls
+
+### Adaptive Chunking Algorithm
+
+- **Paragraph detection**: Natural paragraphs (`\n\n+`) are primary units
+- **Short paragraph merging**: Consecutive paragraphs <100 chars are merged (up to target size)
+- **Long paragraph splitting**: Paragraphs >1200 chars are split at sentence boundaries
+- **PDF line fixing**: Automatically joins broken lines (when line ends with letter, next starts with lowercase)
+- **Configurable parameters** (via environment variables):
+  - `CONTEXT_MIN_CHARS=20` (minimum chunk size)
+  - `CONTEXT_TARGET_CHARS=600` (ideal chunk size)
+  - `CONTEXT_MAX_CHARS=1200` (maximum before forced split)
+  - `CONTEXT_OVERLAP_CHARS=0` (overlap between consecutive chunks)
+  - `CONTEXT_SPLIT_BY_PARAGRAPHS=true` (respect natural paragraph boundaries)
 
 ## Environment Variables
 
 See `.env.example`:
+
 ```bash
 # DeepSeek API
 DEEPSEEK_API_KEY=your_key_here
@@ -124,8 +153,14 @@ LLM_MODEL=deepseek-chat
 INACTIVITY_HOURS_FOR_GREETING=8
 
 # ChromaDB (optional)
-CONTEXT_FILE_PATH=contexto.txt
+CONTEXT_DIR_PATH=contexto
+# CONTEXT_FILE_PATH=contexto.txt  # Opcional para compatibilidad (archivo único)
 CONTEXT_RESULTS_COUNT=3
+# CONTEXT_MIN_CHARS=20      # Mínimo de caracteres por chunk
+# CONTEXT_TARGET_CHARS=600   # Objetivo ideal de caracteres por chunk
+# CONTEXT_MAX_CHARS=1200     # Máximo de caracteres antes de forzar división
+# CONTEXT_OVERLAP_CHARS=0   # Superposición entre chunks consecutivos
+# CONTEXT_SPLIT_BY_PARAGRAPHS=true  # Respetar párrafos naturales (true/false)
 CHROMA_HOST=localhost
 CHROMA_PORT=8000
 CHROMA_SSL=false
